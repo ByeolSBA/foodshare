@@ -84,13 +84,6 @@ pool.getConnection()
     process.exit(1);
   });
 
-//
-// 🧪 Ruta test
-//
-app.get("/", (req, res) => {
-  res.send("API funcionando 🚀");
-});
-
 
 
 let db; // será un Pool (mysql2/promise.createPool)
