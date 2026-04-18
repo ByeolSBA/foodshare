@@ -12,6 +12,7 @@ FoodShare permite a **donantes** publicar excedentes de alimentos, a **ONGs** so
 
 ## 🚀 Cómo ejecutar el proyecto
 
+
 ### Requisitos previos
 - Node.js 18+
 - MariaDB / MySQL 8+

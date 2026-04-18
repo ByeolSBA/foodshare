@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { getSocketUrl } from '../config/urls';
 
 export interface NotificationData {
   type: 'new_message' | 'donation_status_change' | 'new_donation';
@@ -6,8 +7,9 @@ export interface NotificationData {
   timestamp: string;
 }
 
-class NotificationService {
+export class NotificationService {
   private socket: Socket | null = null;
+  private userId: string | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
@@ -18,9 +20,7 @@ class NotificationService {
       return;
     }
 
-    const serverUrl = (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') 
-      ? window.location.origin 
-      : 'http://localhost:3001';
+    const serverUrl = getSocketUrl();
 
     this.socket = io(serverUrl, {
       auth: {

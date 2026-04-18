@@ -48,8 +48,13 @@ app.use("/api", limiter);
 // 🌐 Middleware
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(",") || "*",
+    origin: process.env.ALLOWED_ORIGINS?.split(",") || [
+      "http://localhost:5173",
+      "https://tu-app-render.onrender.com" // Reemplaza con tu URL de Render
+    ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Origin", "X-Requested-With"],
   })
 );
 
@@ -71,10 +76,23 @@ const imageRoutes = require("./routes/images");
 app.use("/images", imageRoutes);
 
 //
-// 🔥 CONEXIÓN A MYSQL (CORREGIDA)
+//  CONEXIÓN A MYSQL (RAILWAY)
 //
 
-const pool = mysql.createPool(process.env.MYSQL_PUBLIC_URL);
+// Configuración para Railway
+const dbConfig = {
+  host: process.env.DB_HOST || process.env.RAILWAY_PRIVATE_HOST || 'localhost',
+  user: process.env.DB_USER || process.env.RAILWAY_DB_USERNAME || 'root',
+  password: process.env.DB_PASSWORD || process.env.RAILWAY_DB_PASSWORD || '',
+  database: process.env.DB_NAME || process.env.RAILWAY_DB_NAME || 'foodshare',
+  port: process.env.DB_PORT || process.env.RAILWAY_DB_PORT || 3306,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionLimit: 10,
+  acquireTimeout: 60000,
+  timeout: 60000,
+};
+
+const pool = mysql.createPool(dbConfig);
 
 // prueba de conexión
 pool.getConnection()
