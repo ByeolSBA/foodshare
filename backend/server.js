@@ -362,7 +362,7 @@ async function connectDB() {
   try {
     // Usar pool en lugar de una sola conexión para soportar queries concurrentes
     // y reconexión automática ante caídas de la DB.
-    db = mysql.createPool(dbConfig);
+    db = mysql.createPool(process.env.MYSQL_PUBLIC_URL);
 
     // Verificar que la conexión funciona antes de continuar
     await db.execute("SELECT 1");
