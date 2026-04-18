@@ -1,5 +1,8 @@
 node_modules/
-dist/
+/dist/
 .env
 .DS_Store
 backend/uploads/
+
+# Permitir frontend/dist pero ignorar dist/ raíz
+!frontend/dist/
