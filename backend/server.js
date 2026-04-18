@@ -76,35 +76,60 @@ const imageRoutes = require("./routes/images");
 app.use("/images", imageRoutes);
 
 //
-//  CONEXIÓN A MYSQL (RAILWAY)
+//  CONEXIÓN A MYSQL (RAILWAY + RENDER)
 //
 
-// Configuración para Railway
-const dbConfig = {
-  host: process.env.DB_HOST || process.env.RAILWAY_PRIVATE_HOST || 'localhost',
-  user: process.env.DB_USER || process.env.RAILWAY_DB_USERNAME || 'root',
-  password: process.env.DB_PASSWORD || process.env.RAILWAY_DB_PASSWORD || '',
-  database: process.env.DB_NAME || process.env.RAILWAY_DB_NAME || 'foodshare',
-  port: process.env.DB_PORT || process.env.RAILWAY_DB_PORT || 3306,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  connectionLimit: 10,
-  acquireTimeout: 60000,
-  timeout: 60000,
-};
+// Función de conexión limpia para producción
+async function connectDB() {
+  try {
+    // Solo usar dotenv en desarrollo
+    if (process.env.NODE_ENV !== 'production') {
+      require("dotenv").config();
+    }
 
-const pool = mysql.createPool(dbConfig);
+    // Validar que MYSQL_PUBLIC_URL exista en producción
+    if (process.env.NODE_ENV === 'production' && !process.env.MYSQL_PUBLIC_URL) {
+      throw new Error('MYSQL_PUBLIC_URL es requerida en producción');
+    }
 
-// prueba de conexión
-pool.getConnection()
-  .then(() => console.log("✅ Conectado a MySQL 🚀"))
-  .catch(err => {
-    console.error("❌ Error conectando a DB:", err);
+    // Crear pool usando MYSQL_PUBLIC_URL de Railway
+    const pool = mysql.createPool(process.env.MYSQL_PUBLIC_URL);
+
+    // Validar conexión con prueba simple
+    const [rows] = await pool.execute("SELECT 1 as test");
+    
+    if (rows && rows[0]?.test === 1) {
+      console.log("Conexión a MySQL validada exitosamente");
+      return pool;
+    } else {
+      throw new Error('Prueba de conexión falló');
+    }
+
+  } catch (error) {
+    console.error("Error conectando a la base de datos:", error.message);
+    
+    if (process.env.NODE_ENV === 'production') {
+      console.error("Variables de entorno disponibles:");
+      console.error("MYSQL_PUBLIC_URL:", process.env.MYSQL_PUBLIC_URL ? 'SET' : 'NOT SET');
+      console.error("NODE_ENV:", process.env.NODE_ENV);
+    }
+    
     process.exit(1);
-  });
+  }
+}
 
+// Inicializar conexión
+let pool;
+connectDB().then(dbPool => {
+  pool = dbPool;
+  console.log("Base de datos conectada y lista");
+}).catch(err => {
+  console.error("Error fatal en la base de datos:", err);
+  process.exit(1);
+});
 
-
-let db; // será un Pool (mysql2/promise.createPool)
+// Exportar el pool para uso en rutas
+global.dbPool = pool;
 
 async function initSchema() {
   const createUsersTable = `
@@ -116,44 +141,32 @@ async function initSchema() {
       role ENUM('donor', 'ngo', 'volunteer') NOT NULL,
       avatar VARCHAR(1024),
       location VARCHAR(255),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `;
 
   const createDonationsTable = `
     CREATE TABLE IF NOT EXISTS donations (
       id VARCHAR(36) PRIMARY KEY,
-      donor_id VARCHAR(36) NOT NULL,
       title VARCHAR(255) NOT NULL,
       description TEXT,
-      quantity VARCHAR(255) NOT NULL,
+      quantity VARCHAR(255),
       expiration_date DATE NOT NULL,
       location VARCHAR(255) NOT NULL,
-      latitude DOUBLE NULL,
-      longitude DOUBLE NULL,
-      status ENUM('available', 'reserved', 'collected', 'delivered', 'expired', 'cancel_pending', 'cancelled') NOT NULL DEFAULT 'available',
+      coordinates POINT,
+      image_url VARCHAR(1024),
+      status ENUM('available', 'reserved', 'collected', 'delivered', 'expired', 'cancel_pending', 'cancelled') DEFAULT 'available',
+      donor_id VARCHAR(36) NOT NULL,
       claimed_by VARCHAR(36),
       transported_by VARCHAR(36),
-      cancel_requested_by VARCHAR(36),
-      image_url VARCHAR(1024),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (donor_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (claimed_by) REFERENCES users(id) ON DELETE SET NULL,
-      FOREIGN KEY (transported_by) REFERENCES users(id) ON DELETE SET NULL,
-      FOREIGN KEY (cancel_requested_by) REFERENCES users(id) ON DELETE SET NULL
+      FOREIGN KEY (transported_by) REFERENCES users(id) ON DELETE SET NULL
     )
   `;
 
-  const createMessagesTable = `
-    CREATE TABLE IF NOT EXISTS messages (
-      id VARCHAR(36) PRIMARY KEY,
-      sender_id VARCHAR(36) NOT NULL,
-      receiver_id VARCHAR(36) NOT NULL,
-      donation_id VARCHAR(36) NOT NULL,
-      content TEXT NOT NULL,
-      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (donation_id) REFERENCES donations(id) ON DELETE CASCADE

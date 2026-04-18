@@ -1,0 +1,190 @@
+require("dotenv").config();
+
+const express = require("express");
+const cors = require("cors");
+const mysql = require("mysql2/promise");
+const path = require("path");
+const fs = require("fs");
+const bcrypt = require("bcrypt");
+const { v4: uuidv4 } = require("uuid");
+const { createServer } = require("http");
+const { Server } = require("socket.io");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+
+const app = express();
+const server = createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: process.env.ALLOWED_ORIGINS?.split(",") || [
+      "http://localhost:5173",
+    ],
+    methods: ["GET", "POST"],
+  },
+});
+
+const PORT = process.env.PORT || 3001;
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+});
+
+app.use("/api", limiter);
+
+// Middleware
+app.use(
+  cors({
+    origin: process.env.ALLOWED_ORIGINS?.split(",") || [
+      "http://localhost:5173",
+      "https://tu-app-render.onrender.com"
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Origin", "X-Requested-With"],
+  })
+);
+
+app.use(express.json({ limit: "10mb" }));
+
+// Archivos estáticos
+const uploadsRoot = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsRoot)) {
+  fs.mkdirSync(uploadsRoot, { recursive: true });
+}
+
+app.use(
+  "/uploads",
+  (req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+  },
+  express.static(uploadsRoot)
+);
+
+// Rutas de imágenes
+const imageRoutes = require("./routes/images");
+app.use("/images", imageRoutes);
+
+// Conexión a base de datos limpia para producción
+async function connectDB() {
+  try {
+    // Solo usar dotenv en desarrollo
+    if (process.env.NODE_ENV !== 'production') {
+      require("dotenv").config();
+    }
+
+    // Validar que MYSQL_PUBLIC_URL exista en producción
+    if (process.env.NODE_ENV === 'production' && !process.env.MYSQL_PUBLIC_URL) {
+      throw new Error('MYSQL_PUBLIC_URL es requerida en producción');
+    }
+
+    // Crear pool usando MYSQL_PUBLIC_URL de Railway
+    const pool = mysql.createPool(process.env.MYSQL_PUBLIC_URL);
+
+    // Validar conexión con prueba simple
+    const [rows] = await pool.execute("SELECT 1 as test");
+    
+    if (rows && rows[0]?.test === 1) {
+      console.log("Conexión a MySQL validada exitosamente");
+      return pool;
+    } else {
+      throw new Error('Prueba de conexión falló');
+    }
+
+  } catch (error) {
+    console.error("Error conectando a la base de datos:", error.message);
+    
+    if (process.env.NODE_ENV === 'production') {
+      console.error("Variables de entorno disponibles:");
+      console.error("MYSQL_PUBLIC_URL:", process.env.MYSQL_PUBLIC_URL ? 'SET' : 'NOT SET');
+      console.error("NODE_ENV:", process.env.NODE_ENV);
+    }
+    
+    process.exit(1);
+  }
+}
+
+// Inicializar conexión
+let pool;
+connectDB().then(dbPool => {
+  pool = dbPool;
+  console.log("Base de datos conectada y lista");
+  
+  // Inicializar esquema después de conectar
+  initSchema();
+}).catch(err => {
+  console.error("Error fatal en la base de datos:", err);
+  process.exit(1);
+});
+
+// Exportar el pool para uso en rutas
+global.dbPool = pool;
+
+// Función para inicializar esquema
+async function initSchema() {
+  const createUsersTable = `
+    CREATE TABLE IF NOT EXISTS users (
+      id VARCHAR(36) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      role ENUM('donor', 'ngo', 'volunteer') NOT NULL,
+      avatar VARCHAR(1024),
+      location VARCHAR(255),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  const createDonationsTable = `
+    CREATE TABLE IF NOT EXISTS donations (
+      id VARCHAR(36) PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      quantity VARCHAR(255),
+      expiration_date DATE NOT NULL,
+      location VARCHAR(255) NOT NULL,
+      coordinates POINT,
+      image_url VARCHAR(1024),
+      status ENUM('available', 'reserved', 'collected', 'delivered', 'expired', 'cancel_pending', 'cancelled') DEFAULT 'available',
+      donor_id VARCHAR(36) NOT NULL,
+      claimed_by VARCHAR(36),
+      transported_by VARCHAR(36),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (donor_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (claimed_by) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (transported_by) REFERENCES users(id) ON DELETE SET NULL
+    )
+  `;
+
+  try {
+    await pool.execute(createUsersTable);
+    await pool.execute(createDonationsTable);
+    console.log("Esquema de base de datos inicializado");
+  } catch (error) {
+    console.error("Error inicializando esquema:", error);
+  }
+}
+
+// Rutas básicas
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Importar rutas existentes
+const authRoutes = require('./routes/auth');
+const donationRoutes = require('./routes/donations');
+const userRoutes = require('./routes/users');
+
+app.use('/api/auth', authRoutes);
+app.use('/api/donations', donationRoutes);
+app.use('/api/users', userRoutes);
+
+// Iniciar servidor
+server.listen(PORT, () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
+});
