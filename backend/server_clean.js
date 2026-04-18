@@ -161,12 +161,74 @@ async function initSchema() {
     )
   `;
 
+  const createMessagesTable = `
+    CREATE TABLE IF NOT EXISTS messages (
+      id VARCHAR(36) PRIMARY KEY,
+      sender_id VARCHAR(36) NOT NULL,
+      receiver_id VARCHAR(36) NOT NULL,
+      donation_id VARCHAR(36),
+      content TEXT NOT NULL,
+      type ENUM('text', 'system', 'notification') DEFAULT 'text',
+      read_at TIMESTAMP NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (donation_id) REFERENCES donations(id) ON DELETE CASCADE
+    )
+  `;
+
+  const createCertificatesTable = `
+    CREATE TABLE IF NOT EXISTS certificates (
+      id VARCHAR(36) PRIMARY KEY,
+      user_id VARCHAR(36) NOT NULL,
+      donation_id VARCHAR(36),
+      type ENUM('donation', 'transport', 'volunteer') NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      issued_date DATE NOT NULL,
+      pdf_url VARCHAR(1024),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (donation_id) REFERENCES donations(id) ON DELETE SET NULL
+    )
+  `;
+
+  const createNotificationsTable = `
+    CREATE TABLE IF NOT EXISTS notifications (
+      id VARCHAR(36) PRIMARY KEY,
+      user_id VARCHAR(36) NOT NULL,
+      type ENUM('new_donation', 'donation_claimed', 'donation_collected', 'donation_delivered', 'message_received', 'certificate_issued') NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      related_id VARCHAR(36),
+      read_at TIMESTAMP NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `;
+
   try {
+    console.log('Creando tablas de la base de datos...');
+    
     await pool.execute(createUsersTable);
+    console.log('Tabla users creada');
+    
     await pool.execute(createDonationsTable);
-    console.log("Esquema de base de datos inicializado");
+    console.log('Tabla donations creada');
+    
+    await pool.execute(createMessagesTable);
+    console.log('Tabla messages creada');
+    
+    await pool.execute(createCertificatesTable);
+    console.log('Tabla certificates creada');
+    
+    await pool.execute(createNotificationsTable);
+    console.log('Tabla notifications creada');
+    
+    console.log("Esquema de base de datos inicializado correctamente");
   } catch (error) {
     console.error("Error inicializando esquema:", error);
+    throw error;
   }
 }
 
