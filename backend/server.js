@@ -91,12 +91,7 @@ app.get("/", (req, res) => {
   res.send("API funcionando 🚀");
 });
 
-//
-// 🚀 Iniciar servidor
-//
-server.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
-});
+
 
 let db; // será un Pool (mysql2/promise.createPool)
 
