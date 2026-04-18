@@ -232,6 +232,21 @@ async function initSchema() {
   }
 }
 
+// Ruta raíz
+app.get('/', (req, res) => {
+  res.json({
+    message: 'FoodShare API - Servidor funcionando',
+    status: 'active',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      donations: '/api/donations',
+      users: '/api/users'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Rutas básicas
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
