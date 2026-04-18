@@ -469,7 +469,7 @@ io.on("connection", (socket) => {
         donationId,
       });
     }
-
+    
     // Notify any admin monitors of the new joiner so they can connect to them
     for (const monitorSocketId of voiceMonitors.get(donationId) ?? []) {
       io.to(monitorSocketId).emit("voice:shadow_peer", {
@@ -513,6 +513,7 @@ io.on("connection", (socket) => {
       });
     }
   });
+  
 
   // ── Admin monitoring (invisible / inaudible) ─────────────────────────────
 
@@ -653,7 +654,14 @@ app.use("/api/admin", require("./routes/admin"));
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK", message: "FoodShare Backend is running" });
 });
+// 👇 SERVIR FRONTEND (AQUÍ EXACTAMENTE)
+const frontendPath = path.join(__dirname, "../dist");
 
+app.use(express.static(frontendPath));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(frontendPath, "index.html"));
+});
 // 404 handler - SIEMPRE devolver JSON
 app.use((req, res) => {
   console.warn(`Route not found: ${req.method} ${req.path}`);
@@ -702,3 +710,4 @@ connectDB().then(() => {
     24 * 60 * 60 * 1000,
   );
 });
+
