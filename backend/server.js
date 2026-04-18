@@ -1,4 +1,5 @@
 require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const mysql = require("mysql2/promise");
@@ -13,6 +14,7 @@ const rateLimit = require("express-rate-limit");
 
 const app = express();
 const server = createServer(app);
+
 const io = new Server(server, {
   cors: {
     origin: process.env.ALLOWED_ORIGINS?.split(",") || [
@@ -24,89 +26,77 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3001;
 
+// 📁 uploads
 const uploadsRoot = path.join(__dirname, "uploads");
 fs.mkdirSync(path.join(uploadsRoot, "donations"), { recursive: true });
 
-// Security middleware
+// 🔐 Seguridad
 app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:"],
-      },
-    },
-  }),
+    contentSecurityPolicy: false, // evitar problemas en producción
+  })
 );
 
-// Rate limiting
+// 🚫 Rate limit
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: {
-    error: "Too many requests from this IP, please try again later.",
-  },
-  // Skip rate limiting para solicitudes locales y archivos estáticos
-  skip: (req) => {
-    return (
-      req.ip === "127.0.0.1" ||
-      req.ip === "::1" ||
-      req.path.startsWith("/uploads/")
-    );
-  },
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
 });
 
-// Aplicar rate limiting solo a rutas API
 app.use("/api", limiter);
 
-// Middleware
+// 🌐 Middleware
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(",") || [
-      "http://localhost:5173",
-    ],
+    origin: process.env.ALLOWED_ORIGINS?.split(",") || "*",
     credentials: true,
-  }),
+  })
 );
+
 app.use(express.json({ limit: "10mb" }));
-// Servir archivos estáticos con configuración mejorada y CORS
+
+// 📂 Archivos estáticos
 app.use(
   "/uploads",
   (req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Methods", "GET");
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept",
-    );
-    // Helmet pone Cross-Origin-Resource-Policy: same-origin por defecto,
-    // lo que bloquea imágenes cargadas desde otro origen (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin).
-    // Sobreescribimos explícitamente para archivos estáticos públicos.
     res.header("Cross-Origin-Resource-Policy", "cross-origin");
     next();
   },
-  express.static(uploadsRoot),
+  express.static(uploadsRoot)
 );
 
-// Importar rutas de imágenes
+// 📌 Rutas
 const imageRoutes = require("./routes/images");
 app.use("/images", imageRoutes);
 
-// Database connection
-const dbConfig = {
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 10000,
-};
+//
+// 🔥 CONEXIÓN A MYSQL (CORREGIDA)
+//
+
+const pool = mysql.createPool(process.env.MYSQL_PUBLIC_URL);
+
+// prueba de conexión
+pool.getConnection()
+  .then(() => console.log("✅ Conectado a MySQL 🚀"))
+  .catch(err => {
+    console.error("❌ Error conectando a DB:", err);
+    process.exit(1);
+  });
+
+//
+// 🧪 Ruta test
+//
+app.get("/", (req, res) => {
+  res.send("API funcionando 🚀");
+});
+
+//
+// 🚀 Iniciar servidor
+//
+server.listen(PORT, () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
+});
 
 let db; // será un Pool (mysql2/promise.createPool)
 
