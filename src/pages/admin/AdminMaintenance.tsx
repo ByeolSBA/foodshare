@@ -150,7 +150,7 @@ export default function AdminMaintenance() {
           donationDays === "" ? null : Number(donationDays),
       };
       const data = await postAdminMaintenancePrune(authToken, payload);
-      setResult(data.deleted as PruneResult);
+      setResult(data.deleted as unknown as PruneResult);
     } catch (e: any) {
       setErr(e.message || "Error al ejecutar el mantenimiento.");
     } finally {
