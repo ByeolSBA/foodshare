@@ -55,6 +55,16 @@ if (!fs.existsSync(uploadsRoot)) {
   fs.mkdirSync(uploadsRoot, { recursive: true });
 }
 
+// Importar rutas existentes
+const authRoutes = require('./routes/auth');
+const donationRoutes = require('./routes/donations');
+const userRoutes = require('./routes/users');
+
+// Rutas de API (deben ir antes del catch-all del frontend)
+app.use('/api/auth', authRoutes);
+app.use('/api/donations', donationRoutes);
+app.use('/api/users', userRoutes);
+
 // Servir frontend desde el mismo servidor
 const frontendPath = path.join(__dirname, "../frontend/dist");
 if (fs.existsSync(frontendPath)) {
@@ -267,14 +277,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Importar rutas existentes
-const authRoutes = require('./routes/auth');
-const donationRoutes = require('./routes/donations');
-const userRoutes = require('./routes/users');
-
-app.use('/api/auth', authRoutes);
-app.use('/api/donations', donationRoutes);
-app.use('/api/users', userRoutes);
 
 // Iniciar servidor
 server.listen(PORT, () => {
