@@ -55,15 +55,30 @@ if (!fs.existsSync(uploadsRoot)) {
   fs.mkdirSync(uploadsRoot, { recursive: true });
 }
 
-app.use(
-  "/uploads",
-  (req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Cross-Origin-Resource-Policy", "cross-origin");
-    next();
-  },
-  express.static(uploadsRoot)
-);
+// Servir frontend desde el mismo servidor
+const frontendPath = path.join(__dirname, "../frontend/dist");
+if (fs.existsSync(frontendPath)) {
+  app.use(express.static(frontendPath));
+  
+  // Todas las rutas que no son API deben servir el index.html del frontend
+  app.get("*", (req, res) => {
+    if (req.path.startsWith("/api")) {
+      return res.status(404).json({ error: "API endpoint not found" });
+    }
+    res.sendFile(path.join(frontendPath, "index.html"));
+  });
+} else {
+  // Si no hay frontend build, servir solo las rutas de API
+  app.use(
+    "/uploads",
+    (req, res, next) => {
+      res.header("Access-Control-Allow-Origin", "*");
+      res.header("Cross-Origin-Resource-Policy", "cross-origin");
+      next();
+    },
+    express.static(uploadsRoot)
+  );
+}
 
 // Rutas de imágenes
 const imageRoutes = require("./routes/images");
