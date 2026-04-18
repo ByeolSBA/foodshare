@@ -122,9 +122,9 @@ export function DonationCardFinal({
 
         {showStatus && (
           <div
-            className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${statusColors[donation.status]}`}
+            className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${statusColors[donation.status as keyof typeof statusColors]}`}
           >
-            {statusLabels[donation.status]}
+            {statusLabels[donation.status as keyof typeof statusLabels]}
           </div>
         )}
       </div>
